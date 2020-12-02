@@ -2,12 +2,17 @@ use std::{char::from_digit, io::*};
 use rand::prelude::*;
 use std::time::SystemTime;
 
+
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub enum ShownState {
+    Hidden,
+    Revealed,
+    Flagged
+}
+
 pub struct MineField{
-    cols: usize,
-    rows: usize,
-    /// Contains all squares, a square is None if it contains a bomb and u8 by nimber of bombs adjacent
-    //squares: Vec<Vec<bool>> 
-    squares: Vec<Vec<Option<u8>>> 
+    /// Contains all squares, a square is None if it contains a bomb and u8 by number of bombs adjacent
+    pub squares: Vec<Vec<Option<u8>>>,
 }
 impl MineField {
     pub fn generate_random_grid(cols: usize, rows: usize, mine_chance: f64) -> Self {
@@ -21,7 +26,7 @@ impl MineField {
         }
         // count mines in neighbouring squares
         MineField::count_adjacent_mines(&mut squares);
-        return Self{cols, rows, squares};
+        return Self{squares};
     }
 
     fn count_adjacent_mines(squares: &mut Vec<Vec<Option<u8>>>) {
@@ -66,7 +71,7 @@ impl MineField {
         for row in self.squares.iter() {
             for (i, sq) in row.iter().enumerate() {
                 output.push(if *sq == None {'X'} else {from_digit(sq.unwrap().into(), 10).unwrap()});  // add this square´s character to output
-                if (i + 1) % self.cols == 0 { // if at the end of row, add new-line character
+                if (i + 1) % row.len() == 0 { // if at the end of row, add new-line character
                     output.push('\n');
                 }  
                 else {  // else add space
