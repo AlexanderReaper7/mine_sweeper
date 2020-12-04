@@ -2,6 +2,7 @@ use std::{char::from_digit, io::*};
 use rand::prelude::*;
 use std::time::SystemTime;
 
+#[allow(dead_code)]
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum ShownState {
@@ -60,6 +61,7 @@ fn rand_func(rng: &mut ThreadRng, chance: f64) -> bool {
     return y <= chance
 }
 
+#[allow(dead_code)]
 pub fn print(mine_field: &Vec<Vec<Option<u8>>>) {
     let mut output: String = "\n".to_string();
     for row in mine_field.iter() {

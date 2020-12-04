@@ -54,12 +54,12 @@ pub struct MineSweeper {
 impl Default for MineSweeper {
     /// Returns 16*16 with 0.15 concentration and default apperance
     fn default() -> Self {
-        MineSweeper::New(16, 16, 0.15, ApperanceSettings::default())
+        MineSweeper::new(16, 16, 0.15, ApperanceSettings::default())
     }
 }
 
 impl MineSweeper {
-    pub fn New(cols: usize, rows: usize, concentration: f64, appearance: ApperanceSettings) -> Self {
+    pub fn new(cols: usize, rows: usize, concentration: f64, appearance: ApperanceSettings) -> Self {
         let mut mine_count: usize = 0;
         // Create a new game and run it.
         MineSweeper {

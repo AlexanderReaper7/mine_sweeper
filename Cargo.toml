@@ -3,6 +3,7 @@ name = "mine_sweeper"
 version = "0.1.0"
 authors = ["Alexander Öberg <stativetroller7@gmail.com>"]
 edition = "2018"
+default-run = "mine_sweeper"
 
 [[bin]]
 name = "mine_sweeper"

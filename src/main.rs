@@ -6,13 +6,13 @@ extern crate piston;
 extern crate piston_window;
 
 use piston_window::*;
-use std::{time::SystemTime, env};
+use std::env;
 use env::args;
 use mine_field::*;
 use mine_sweeper::*;
 use opengl_graphics::{GlGraphics, OpenGL};
 use piston::{Button, MouseButton, MouseCursorEvent, PressEvent, ResizeEvent, event_loop::{EventSettings, Events}};
-use piston::input::{RenderEvent,  UpdateEvent};
+use piston::input::RenderEvent;
 use piston::window::WindowSettings;
 
 
@@ -46,27 +46,27 @@ fn get_args() -> Result<(usize, usize, f64), &'static str> {
 }
 
 fn main() {
-    let mut mine_sweeper: MineSweeper;
-
-    if let Ok((cols, rows, chance)) = get_args() {
-        mine_sweeper = MineSweeper::New(cols, rows, chance, ApperanceSettings::default());
-    }
-    else {
-        mine_sweeper = MineSweeper::default();
-    }
-    
-    let window_size: [f64;2] = [mine_sweeper.apperance.square_size * mine_sweeper.cols() as f64, mine_sweeper.apperance.square_size * mine_sweeper.rows() as f64]; 
-    
-    // Create a window.
-    let mut window: PistonWindow = WindowSettings::new("Mine Sweeper", window_size)
+    // Create a window. the window need to be created before MineSweeper
+    let mut window: PistonWindow = WindowSettings::new("Mine Sweeper", [100.0;2])
         .graphics_api(OpenGL::V3_2)
         .exit_on_esc(true)
         .samples(4)
         .build()
         .unwrap();
 
+    let mut mine_sweeper: MineSweeper;
+    
+    if let Ok((cols, rows, chance)) = get_args() {
+        mine_sweeper = MineSweeper::new(cols, rows, chance, ApperanceSettings::default());
+    }
+    else {
+        mine_sweeper = MineSweeper::default();
+    }
+    let window_size: [f64;2] = [mine_sweeper.apperance.square_size * mine_sweeper.cols() as f64, mine_sweeper.apperance.square_size * mine_sweeper.rows() as f64]; 
+    
     window.set_lazy(true);
     window.set_max_fps(120);
+    window.set_size(window_size);
 
     let mut cursor = [0.0, 0.0];
     let mut events = Events::new(EventSettings::new());
@@ -93,6 +93,5 @@ fn main() {
             }
             _ => (),
         }
-        //if let Some(args) = e.update_args() { mine_sweeper.update(&args); }
     }
 }
