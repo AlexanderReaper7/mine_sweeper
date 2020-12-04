@@ -1,103 +1,26 @@
 mod mine_field;
+mod mine_sweeper;
 extern crate graphics;
 extern crate opengl_graphics;
 extern crate piston;
 extern crate piston_window;
 
+use color::BLACK;
 use piston_window::*;
-use std::{char::from_digit, env};
+use std::{time::SystemTime, env};
 use env::args;
-use graphics::{Rectangle, color::{BLACK, WHITE}, grid::Grid, line::Line, rectangle};
-use mine_field::{MineField, ShownState};
-use opengl_graphics::{GlGraphics, GlyphCache, OpenGL};
+use graphics::{grid::Grid, line::Line};
+use mine_field::*;
+use mine_sweeper::*;
+use opengl_graphics::{GlGraphics, OpenGL};
 use piston::{Button, MouseButton, MouseCursorEvent, PressEvent, ResizeEvent, event_loop::{EventSettings, Events}};
-use piston::input::{RenderArgs, RenderEvent, UpdateArgs, UpdateEvent};
+use piston::input::{RenderEvent,  UpdateEvent};
 use piston::window::WindowSettings;
 
-const GREY: [f32; 4] = [0.5,0.5,0.5,1.0];
-
-pub struct App {
-    gl: GlGraphics, // OpenGL drawing backend.
-    mines: MineField,
-    /// Contains the shown state for all squares
-    states: Vec<Vec<ShownState>>,
-    grid: Grid,
-    line: Line,
-    size: [f64;2]
-}
-
-impl App {
-    #![feature(assoc_char_funcs)]
-    fn render(&mut self, args: &RenderArgs, glyphs: &mut Glyphs) {
-        use graphics::*;
-
-        let c = self.gl.draw_begin(args.viewport());
-        // Clear the screen.
-        clear(BLACK, &mut self.gl);
-
-        let transform = c.transform.scale(args.window_size[0] / self.size[0], args.window_size[1] / self.size[1]);
-
-        // Draw the grid lines
-        self.grid.draw(&self.line, &Default::default(), transform, &mut self.gl);
-        // Draw the cells
-        let mut y: usize = 0;
-        for row in &self.states {
-            let mut x: usize = 0;
-            for col in row {
-                match col {
-                    // draw gray square
-                    ShownState::Hidden => { 
-                        rectangle(GREY, 
-                            [self.grid.x_pos((x as u32,y as u32))+LINE_RADIUS, self.grid.y_pos((x as u32, y as u32))+LINE_RADIUS, SQUARE_SIZE-LINE_RADIUS*2.0, SQUARE_SIZE-LINE_RADIUS*2.0],
-                             transform,
-                              &mut self.gl
-                            )
-                    },
-                    ShownState::Revealed => {
-                        if let Some(sq) = &self.mines.squares[y][x] { 
-                            // unless the cell is 0, draw the character
-                            if *sq != 0 {
-                                //let mut tmp = [0; 4];
-                                //text(WHITE, 12, from_digit(*sq as u32, 10).unwrap().encode_utf8(&mut tmp), glyphs,transform, &mut self.gl);
-                            }
-                            else {
-
-                            }
-                         }
-                         else {
-
-                         }
-
-                    },
-                    // draw a flag here
-                    ShownState::Flagged => {todo!()}
-                }
-                x += 1;
-            }
-            y += 1;
-        }
-        self.gl.draw_end();
-    }
-
-    fn update(&mut self, args: &UpdateArgs) {
-
-    }
-
-
-    fn left_click(&mut self, mouse_pos: [f64;2]) {
-        println!("L click at: {:?}", mouse_pos);
-        // get cell
-        let v = get_cell_from_position(self.grid.units, mouse_pos);
-        // set cell
-    }
-
-    fn right_click(&mut self, mouse_pos: [f64;2]) {
-        println!("R click at: {:?}", mouse_pos);
-    }
-}
-
-pub fn get_cell_from_position(units: f64, position: [f64;2]) -> [u32;2] {
-    [(position[0] / units).trunc() as u32, (position[1] / units).trunc() as u32]
+enum GameState {
+    Running,
+    Won,
+    Lost
 }
 
 
@@ -132,7 +55,6 @@ fn get_args() -> Result<(usize, usize, f64), &'static str> {
 
 const SQUARE_SIZE: f64 = 20.0;
 const LINE_RADIUS: f64 = 1.0;
-const FONT_PATH: &str = "assets/RobotoMono-Regular.ttf";
 
 fn main() {
     let (cols, rows, chance) = get_args().unwrap();
@@ -150,43 +72,78 @@ fn main() {
         .build()
         .unwrap();
 
-    // Import font
-    let mut glyphs = window.load_font(FONT_PATH).unwrap();
+    window.set_lazy(true);
+    window.set_max_fps(120);
 
+    let temp = generate_random_grid(cols, rows, chance);
     // Create a new game and run it.
-    let mut app = App {
+    let mut mine_sweeper = MineSweeper {
         gl: GlGraphics::new(opengl),
-        mines: MineField::generate_random_grid(cols, rows, chance),
+        mine_field: temp.0,
+        mine_count: temp.1,
         states: vec![vec![ShownState::Hidden; cols]; rows],
         grid: Grid {
             cols:(cols as u32),
             rows:(rows as u32),
             units: SQUARE_SIZE,
         },
-        line: Line::new(WHITE, LINE_RADIUS),
-        size: window_size // No real need to have these in the App strukt, could just compute it every run
+        line: Line::new(BLACK, LINE_RADIUS),
+        scale: window_size // No real need to have these in the MineSweeper struct, could just compute it every run
     };
+    let mut game_state: GameState = GameState::Running; 
     let mut cursor = [0.0, 0.0];
-    let mut scale = [0.0, 0.0];
+    let time = SystemTime::now();
+    let mut flagged_mines: usize = 0;
     let mut events = Events::new(EventSettings::new());
     while let Some(e) = events.next(&mut window) {
-        if let Some(Button::Mouse(button)) = e.press_args() {
-            match button {
-                MouseButton::Left => app.left_click([cursor[0] / scale[0], cursor[1] / scale[1]]),
-                MouseButton::Right => app.right_click([cursor[0] / scale[0], cursor[1] / scale[1]]),
-                _ => ()
+
+        match game_state {
+            GameState::Running => {
+                if let Some(Button::Mouse(button)) = e.press_args() {
+                    match button {
+                        MouseButton::Left => {
+                            if let Ok(hit_mine) = mine_sweeper.left_click([cursor[0] / mine_sweeper.scale[0], cursor[1] / mine_sweeper.scale[1]]) {
+                                if hit_mine {
+                                    // Gameover 
+                                    game_state = GameState::Lost;
+                                }
+                            }
+                        },
+                        MouseButton::Right => {
+                            if let Ok(res) = mine_sweeper.right_click([cursor[0] / mine_sweeper.scale[0], cursor[1] / mine_sweeper.scale[1]]) {
+                                if res.1 {
+                                    flagged_mines = if res.0 == ShownState::Flagged {flagged_mines+1} else {flagged_mines-1};
+                                    if flagged_mines >= mine_sweeper.mine_count {
+                                        game_state = GameState::Won;
+                                    }
+                                }
+                            }
+                        },
+                        _ => ()
+                    }
+                }
+
+                e.mouse_cursor(|pos| cursor = pos);
+                e.resize(|args| mine_sweeper.scale = [args.window_size[0] / window_size[0], args.window_size[1] / window_size[1]]);
+
+                if let Some(args) = e.render_args() { mine_sweeper.render(&args, &time); }
+            }
+            GameState::Won => {
+                if let Some(_) = e.render_args() {
+                    window.draw_2d(&e, |_c, g, _device| {
+                     clear([0.0, 1.0, 0.0, 1.0], g);
+                    });
+                }
+
+            }
+            GameState::Lost => {
+                if let Some(_) = e.render_args() {
+                    window.draw_2d(&e, |_c, g, _device| {
+                     clear([1.0, 0.0, 0.0, 1.0], g);
+                    });
+                }
             }
         }
-
-        e.mouse_cursor(|pos| cursor = pos);
-        e.resize(|args| scale = [args.window_size[0] / window_size[0], args.window_size[1] / window_size[1]]);
-
-        if let Some(args) = e.render_args() {
-            app.render(&args, &mut glyphs);
-        }
-
-        if let Some(args) = e.update_args() {
-            app.update(&args);
-        }
+        //if let Some(args) = e.update_args() { mine_sweeper.update(&args); }
     }
 }
