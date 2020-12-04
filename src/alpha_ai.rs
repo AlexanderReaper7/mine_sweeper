@@ -68,31 +68,26 @@ fn main() {
     window.set_lazy(true);
     window.set_max_fps(120);
 
-    let mut cursor = [0.0, 0.0];
     let mut events = Events::new(EventSettings::new());
     while let Some(e) = events.next(&mut window) {
 
-        e.mouse_cursor(|pos| cursor = pos);
         e.resize(|args| mine_sweeper.scale = [args.window_size[0] / window_size[0], args.window_size[1] / window_size[1]]);
 
-        if let Some(args) = e.render_args() { mine_sweeper.render(&args); }
-
-        match mine_sweeper.game_state {
-            GameState::Running => {
-                if let Some(Button::Mouse(button)) = e.press_args() {
-                    match button {
-                        MouseButton::Left => {
-                            mine_sweeper.left_click([cursor[0] / mine_sweeper.scale[0], cursor[1] / mine_sweeper.scale[1]]);
-                        },
-                        MouseButton::Right => {
-                            mine_sweeper.right_click([cursor[0] / mine_sweeper.scale[0], cursor[1] / mine_sweeper.scale[1]]);
-                        },
-                        _ => ()
-                    }
-                }
-            }
-            _ => (),
+        if let Some(args) = e.render_args() { 
+            mine_sweeper.render(&args); 
+            // Additional rendering (on top of mine field) goes here...
+            // need to start and end again, might move to outside of MineSweeper::render
         }
-        //if let Some(args) = e.update_args() { mine_sweeper.update(&args); }
+
+        if let Some(args) = e.update_args() { update_ai(&mut mine_sweeper, &args); }
     }
+}
+
+fn update_ai(mine_sweeper: &mut MineSweeper, args: &UpdateArgs) {
+    match mine_sweeper.game_state {
+        GameState::Running => {}
+        _ => (),
+    }
+    
+
 }

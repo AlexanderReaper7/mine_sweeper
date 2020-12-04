@@ -4,6 +4,14 @@ version = "0.1.0"
 authors = ["Alexander Öberg <stativetroller7@gmail.com>"]
 edition = "2018"
 
+[[bin]]
+name = "mine_sweeper"
+path = "src/main.rs"
+
+[[bin]]
+name = "alpha_ai"
+path = "src/alpha_ai.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

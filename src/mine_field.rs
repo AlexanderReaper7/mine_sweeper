@@ -10,18 +10,18 @@ pub enum ShownState {
     Flagged
 }
 
-pub fn generate_random_grid(cols: usize, rows: usize, mine_chance: f64) -> (Vec<Vec<Option<u8>>>, usize) {
+pub fn generate_random_grid(cols: usize, rows: usize, mine_concentration: f64, mine_count_output: &mut usize) -> Vec<Vec<Option<u8>>> {
     let mut rng_thread = rand::thread_rng();
-    let mut mine_count: usize = 0;
     let mut squares: Vec<Vec<Option<u8>>>  = vec![vec![None;cols];rows];
     for row in squares.iter_mut() {
         for sq in row.iter_mut() {
-            *sq = if rand_func(&mut rng_thread, mine_chance) {mine_count += 1; None} else {Some(0)}
+            *sq = if rand_func(&mut rng_thread, mine_concentration) {*mine_count_output += 1; None} else {Some(0)}
         }
     }
     // count mines in neighbouring squares
     count_adjacent_mines(&mut squares);
-    return (squares, mine_count);
+
+    return squares;
 }
 
 fn count_adjacent_mines(squares: &mut Vec<Vec<Option<u8>>>) {
@@ -83,7 +83,8 @@ fn benchmark() {
     let mut i = 1;
     while times < 21 {
         let time = SystemTime::now();
-        let _grid = generate_random_grid(1000, i, 0.2);
+        let mut _mine_count: usize = 0;
+        let _grid = generate_random_grid(1000, i, 0.2, &mut _mine_count);
         let elap = time.elapsed();
         print!("{:?} {:?} {:?} ", times, i, elap);
         println!("time per 1000: {:?} µs", elap.unwrap().as_micros() /  i as u128);
