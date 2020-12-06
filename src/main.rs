@@ -16,7 +16,7 @@ use piston::input::RenderEvent;
 use piston::window::WindowSettings;
 
 
-fn get_args() -> Result<(usize, usize, f64), &'static str> {
+pub fn get_args() -> Result<(usize, usize, f64), &'static str> {
     if env::args_os().len() != 4 {
         return Err("wrong number of arguments");
     }
@@ -34,10 +34,10 @@ fn get_args() -> Result<(usize, usize, f64), &'static str> {
                 Ok(v) => {v},
                 Err(_) => {return Err("failed to convert row")},
             },
-            3 => match arg.parse() {
-                Ok(v) => {chance = v},
+            3 => chance = match arg.parse() {
+                Ok(v) => {v},
                 Err(_) => {return Err("Failed to convert chance")},
-            }
+            },
             _ => return Err("unknown error")
             
         }
@@ -68,6 +68,7 @@ fn main() {
     window.set_max_fps(120);
     window.set_size(window_size);
 
+    let mut gl: GlGraphics = GlGraphics::new(OpenGL::V3_2);
     let mut cursor = [0.0, 0.0];
     let mut events = Events::new(EventSettings::new());
     while let Some(e) = events.next(&mut window) {
@@ -75,7 +76,7 @@ fn main() {
         e.mouse_cursor(|pos| cursor = pos);
         e.resize(|args| mine_sweeper.scale = [args.window_size[0] / window_size[0], args.window_size[1] / window_size[1]]);
 
-        if let Some(args) = e.render_args() { mine_sweeper.render(&args); }
+        if let Some(args) = e.render_args() { mine_sweeper.render(&args, &mut gl); }
 
         match mine_sweeper.game_state {
             GameState::Running => {

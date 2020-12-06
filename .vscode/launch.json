@@ -40,6 +40,25 @@
             },
             "args": [],
             "cwd": "${workspaceFolder}"
-        }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'alpha_ai'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=alpha_ai",
+                    "--package=mine_sweeper"
+                ],
+                "filter": {
+                    "name": "alpha_ai",
+                    "kind": "bin"
+                }
+            },
+            "args": ["60", "30", "0.1"],
+            "cwd": "${workspaceFolder}"
+        },
+
     ]
 }

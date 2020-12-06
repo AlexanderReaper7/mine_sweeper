@@ -4,7 +4,7 @@ use piston::RenderArgs;
 use std::time::SystemTime;
 use crate::mine_field::*;
 
-const COLORS: [[f32; 4]; 8] = [
+pub const COLORS: [[f32; 4]; 8] = [
     [0.0,0.0,1.0,1.0], // Blue
     [0.0,1.0,0.0,1.0], // Green
     [1.0,0.0,0.0,1.0], // Red
@@ -14,7 +14,7 @@ const COLORS: [[f32; 4]; 8] = [
     [0.6,0.0,0.0,1.0], // Dark Red
     [0.65,0.0,0.55,1.0], // purple
     ];
-const NEIGHBOURS: [[i8;2];8] = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1] ];
+pub const NEIGHBOURS: [[i8;2];8] = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1] ];
 
 pub enum GameState {
     Running,
@@ -40,7 +40,6 @@ impl Default for ApperanceSettings{
 }
 
 pub struct MineSweeper {
-    gl: GlGraphics, 
     pub mine_field: Vec<Vec<Option<u8>>>,
     mine_count: usize,
     mines_flagged: usize,
@@ -63,7 +62,6 @@ impl MineSweeper {
         let mut mine_count: usize = 0;
         // Create a new game and run it.
         MineSweeper {
-            gl: GlGraphics::new(OpenGL::V3_2),
             mine_field: generate_random_grid(cols, rows, concentration, &mut mine_count),
             mine_count,
             mines_flagged: 0,
@@ -84,14 +82,13 @@ impl MineSweeper {
         return self.states.len()
     }
 
-
-    pub fn render(&mut self, args: &RenderArgs) {
+    pub fn render(&mut self, args: &RenderArgs, gl: &mut GlGraphics) {
         use graphics::*;
 
-        let c = self.gl.draw_begin(args.viewport());
+        let c = gl.draw_begin(args.viewport());
         match self.game_state {
             GameState::Running => {
-                clear(self.apperance.background_color, &mut self.gl);
+                clear(self.apperance.background_color, gl);
 
                 let transform = c.transform.scale(self.scale[0], self.scale[1]);
 
@@ -106,40 +103,40 @@ impl MineSweeper {
                         match col {
                             // draw White square
                             ShownState::Hidden => { 
-                                rectangle(WHITE, rect, transform,&mut self.gl);
+                                rectangle(WHITE, rect, transform,gl);
                             },
                             ShownState::Revealed => {
                                 if let Some(sq) = &self.mine_field[y][x] { 
                                     // unless the cell is 0, draw the character
                                     if *sq != 0 {
                                         //let color: [f32;4] = [(*sq%2).into(), f32::from(*sq%3)/2.0, f32::from(*sq%4)/3.0, 1.0];
-                                        rectangle(COLORS[(*sq -1) as usize], rect, transform, &mut self.gl);
+                                        rectangle(COLORS[(*sq -1) as usize], rect, transform, gl);
                                     }
                                 }
                                 else {
                                     // Draw bomb
-                                    ellipse(WHITE, rect, transform, &mut self.gl);
+                                    ellipse(WHITE, rect, transform, gl);
                                 }
                             },
                             // draw a flag here
                             ShownState::Flagged => {
                                 let time: f32 = SystemTime::now().duration_since(self.start_time).unwrap().as_secs_f32();
                                 let color: [f32;4] = [(time.sin()+1.0)/2.0, ((time+1.57).sin()+1.0)/2.0, ((time+3.14).sin()+1.0)/2.0, 1.0];
-                                rectangle(color, rect, transform, &mut self.gl);
+                                rectangle(color, rect, transform, gl);
                             }
                         }
                     }
                 }
             }
             GameState::Won => {
-                clear([0.0, 1.0, 0.0, 1.0], &mut self.gl);
+                clear([0.0, 1.0, 0.0, 1.0], gl);
             }
             GameState::Lost => {
-                clear([1.0, 0.0, 0.0, 1.0], &mut self.gl);
+                clear([1.0, 0.0, 0.0, 1.0], gl);
             }
         }
 
-        self.gl.draw_end();
+        gl.draw_end();
     }
 
     pub fn left_click(&mut self, mouse_pos: [f64;2]) {
@@ -152,6 +149,16 @@ impl MineSweeper {
         }
     }
 
+    pub fn left_click_cell(&mut self, cell_pos: [usize;2]) {
+        //println!("L click at: {:?}, is {:?}", cell_pos, self.mine_field[cell_pos[1]][cell_pos[0]]);
+        if let Ok(hit_mine) = self.reveal_cell(cell_pos) {
+            if hit_mine {
+                self.game_state = GameState::Lost;
+            }
+        }
+    }
+
+
     pub fn right_click(&mut self, mouse_pos: [f64;2]) {
         let cell_pos = self.get_cell_from_position(mouse_pos);
         println!("R click at: {:?}={:?}, is {:?}", mouse_pos, cell_pos, self.mine_field[cell_pos[1]][cell_pos[0]]);
@@ -163,7 +170,18 @@ impl MineSweeper {
                 }
             }
         }
+    }
 
+    pub fn right_click_cell(&mut self, cell_pos: [usize;2]) {
+        //println!("R click at: {:?}, is {:?}", cell_pos, self.mine_field[cell_pos[1]][cell_pos[0]]);
+        if let Ok(res) = self.toggle_flag_cell(cell_pos) {
+            if res.1 {
+                self.mines_flagged = if res.0 == ShownState::Flagged {self.mines_flagged+1} else {self.mines_flagged-1};
+                if self.mines_flagged >= self.mine_count {
+                    self.game_state = GameState::Won;
+                }
+            }
+        }
     }
 
     fn get_cell_from_position(&self, position: [f64;2]) -> [usize;2] { //TODO: add bounds checking and return a result instead
