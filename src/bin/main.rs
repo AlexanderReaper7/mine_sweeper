@@ -1,56 +1,22 @@
-mod mine_field;
-mod mine_sweeper;
+extern crate mine_sweeper;
 extern crate graphics;
 extern crate opengl_graphics;
 extern crate piston;
 extern crate piston_window;
 
 use piston_window::*;
-use std::env;
-use env::args;
-use mine_field::*;
-use mine_sweeper::*;
+use mine_sweeper::{*, mine_sweeper::*};
 use opengl_graphics::{GlGraphics, OpenGL};
 use piston::{Button, MouseButton, MouseCursorEvent, PressEvent, ResizeEvent, event_loop::{EventSettings, Events}};
 use piston::input::RenderEvent;
 use piston::window::WindowSettings;
-
-
-pub fn get_args() -> Result<(usize, usize, f64), &'static str> {
-    if env::args_os().len() != 4 {
-        return Err("wrong number of arguments");
-    }
-    let mut col: usize = 0;
-    let mut row: usize = 0;
-    let mut chance: f64 = 0.0;
-    for (i, arg) in args().enumerate() {
-        match i {
-            0 => continue,
-            1 => col = match arg.parse() {
-                Ok(v) => {v},
-                Err(_) => {return Err("faild to convert col")},
-            },
-            2 => row = match arg.parse() {
-                Ok(v) => {v},
-                Err(_) => {return Err("failed to convert row")},
-            },
-            3 => chance = match arg.parse() {
-                Ok(v) => {v},
-                Err(_) => {return Err("Failed to convert chance")},
-            },
-            _ => return Err("unknown error")
-            
-        }
-    }
-    return Ok((col, row, chance))
-}
 
 fn main() {
     // Create a window. the window need to be created before MineSweeper
     let mut window: PistonWindow = WindowSettings::new("Mine Sweeper", [100.0;2])
         .graphics_api(OpenGL::V3_2)
         .exit_on_esc(true)
-        .samples(4)
+        //.samples(4)
         .build()
         .unwrap();
 
@@ -63,11 +29,11 @@ fn main() {
         mine_sweeper = MineSweeper::default();
     }
     let window_size: [f64;2] = [mine_sweeper.apperance.square_size * mine_sweeper.cols() as f64, mine_sweeper.apperance.square_size * mine_sweeper.rows() as f64]; 
-    
-    window.set_lazy(true);
-    window.set_max_fps(120);
-    window.set_size(window_size);
 
+    //window.set_lazy(true);
+    //window.set_max_fps(120);
+    window.set_size(window_size);
+    
     let mut gl: GlGraphics = GlGraphics::new(OpenGL::V3_2);
     let mut cursor = [0.0, 0.0];
     let mut events = Events::new(EventSettings::new());

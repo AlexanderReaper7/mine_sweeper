@@ -7,20 +7,31 @@ default-run = "alpha_ai"
 
 [[bin]]
 name = "mine_sweeper"
-path = "src/main.rs"
+path = "src/bin/main.rs"
 
 [[bin]]
 name = "alpha_ai"
-path = "src/alpha_ai.rs"
+path = "src/bin/alpha_ai.rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "alpha_ai_noui"
+path = "src/bin/alpha_ai_noui.rs"
+
+# See more keys and their definitions at https://doc.rus0t-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 rand = "0.7.3"
 piston = "0.52.1"
 piston2d-graphics = "0.39.0"
-pistoncore-glutin_window = "0.67.1"
-piston2d-opengl_graphics = "0.76.0"
-piston_window = "*"
-gfx = "*"
+pistoncore-glutin_window = "0.68.0"
+piston2d-opengl_graphics = "0.77.0"
+piston_window = "0.117.0"
+gfx = "0.18.2"
 piston2d-gfx_graphics = "0.72.0"
+
+[dev-dependencies]
+criterion = "0.3.4"
+
+[[bench]]
+name = "my_benchmark"
+harness = false

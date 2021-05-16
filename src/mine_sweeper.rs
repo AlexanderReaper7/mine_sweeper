@@ -1,8 +1,9 @@
-use graphics::{Ellipse, Line, circle_arc, color::BLACK, color::WHITE, grid::Grid, ellipse, rectangle};
+use graphics::{color::BLACK, color::WHITE, ellipse, rectangle};
 use opengl_graphics::{GlGraphics, OpenGL};
 use piston::RenderArgs;
 use std::time::SystemTime;
-use crate::mine_field::*;
+use std::char::from_digit;
+use rand::prelude::*;
 
 pub const COLORS: [[f32; 4]; 8] = [
     [0.0,0.0,1.0,1.0], // Blue
@@ -14,8 +15,15 @@ pub const COLORS: [[f32; 4]; 8] = [
     [0.6,0.0,0.0,1.0], // Dark Red
     [0.65,0.0,0.55,1.0], // purple
     ];
+
 pub const NEIGHBOURS: [[i8;2];8] = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1] ];
 
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub enum ShownState {
+    Hidden,
+    Revealed,
+    Flagged
+}
 pub enum GameState {
     Running,
     Won,
@@ -90,7 +98,8 @@ impl MineSweeper {
             GameState::Running => {
                 clear(self.apperance.background_color, gl);
 
-                let transform = c.transform.scale(self.scale[0], self.scale[1]);
+                let windows_scaling: [f64;2] = [c.get_view_size()[0] / c.viewport.unwrap().draw_size[0] as f64, c.get_view_size()[1] / c.viewport.unwrap().draw_size[1] as f64];
+                let transform = c.transform.scale(windows_scaling[0], windows_scaling[1]).scale(self.scale[0], self.scale[1]);
 
                 // Draw the cells
                 for (y, row) in self.states.iter().enumerate() {
@@ -115,7 +124,7 @@ impl MineSweeper {
                                 }
                                 else {
                                     // Draw bomb
-                                    ellipse(WHITE, rect, transform, gl);
+                                    // ellipse(WHITE, rect, transform, gl);
                                 }
                             },
                             // draw a flag here
@@ -201,7 +210,7 @@ impl MineSweeper {
                         let y: i32 = position[1] as i32 + neighbour[1] as i32;
                         if y < 0 || y >= self.states.len() as i32 { continue;}
                         
-                        self.reveal_cell( [x as usize, y as usize]);
+                        let _ = self.reveal_cell( [x as usize, y as usize]);
                     }
                 }
                 return Ok(false)
@@ -213,7 +222,7 @@ impl MineSweeper {
         return Err(())
     }
 
-    fn toggle_flag_cell (&mut self, position: [usize;2]) -> Result<(ShownState, bool), ()> { // TODO: refactor to not use matches
+    fn toggle_flag_cell(&mut self, position: [usize;2]) -> Result<(ShownState, bool), ()> { // TODO: refactor to not use matches
         match self.states[position[1] as usize][position[0] as usize] {
             ShownState::Hidden => {
                 if let Ok(res) = self.flag_cell(position) {
@@ -249,3 +258,87 @@ impl MineSweeper {
     }
 }
 
+fn rand_func(rng: &mut ThreadRng, chance: f64) -> bool {
+    let y = rng.gen_range(0.0, 1.0);
+    return y <= chance
+}
+
+pub fn generate_random_grid(cols: usize, rows: usize, mine_concentration: f64, mine_count_output: &mut usize) -> Vec<Vec<Option<u8>>> {
+    let mut rng_thread = rand::thread_rng();
+    let mut squares: Vec<Vec<Option<u8>>>  = vec![vec![None;cols];rows];
+    for row in squares.iter_mut() {
+        for sq in row.iter_mut() {
+            *sq = if rand_func(&mut rng_thread, mine_concentration) {*mine_count_output += 1; None} else {Some(0)}
+        }
+    }
+    // count mines in neighbouring squares
+    count_adjacent_mines(&mut squares);
+
+    return squares;
+}
+
+fn count_adjacent_mines(squares: &mut Vec<Vec<Option<u8>>>) {
+    for row in 0..squares.len() {
+        for col in 0..squares[row].len() {
+            if squares[row][col].is_some() {
+                for y in 0..3 {
+                    for x in 0..3 {
+                        if x == 1 && y == 1 {continue;} // skip self
+                        let y_sq = (row+y) as isize -1;
+                        let x_sq = (col+x) as isize -1;
+                        if y_sq < 0 || y_sq >= squares.len() as isize {continue;}
+                        if x_sq < 0 || x_sq >= squares[y_sq as usize].len() as isize {continue;}
+                        if squares[row+y-1][col+x-1].is_none() {
+                            match &mut squares[row][col] {
+                                None => {},
+                                Some(sq) => {
+                                    *sq += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Print the values as they are being made
+            // if squares[row][col].is_none() {print!("X ")} else {print!("{} ", from_digit(squares[row][col].unwrap().into(), 10).unwrap())};  // add this square´s character to output
+            // if col +1 % squares[row].len() == 0 { // if at the end of row, add new-line character
+            //     println!();
+            // }  
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub fn print(mine_field: &Vec<Vec<Option<u8>>>) {
+    let mut output: String = "\n".to_string();
+    for row in mine_field.iter() {
+        for (i, sq) in row.iter().enumerate() {
+            output.push(if *sq == None {'X'} else {from_digit(sq.unwrap().into(), 10).unwrap()});  // add this square´s character to output
+            if (i + 1) % row.len() == 0 { // if at the end of row, add new-line character
+                output.push('\n');
+            }  
+            else {  // else add space
+                output.push(' ');
+            }
+        }
+    }
+    println!("{}", output);
+    //stdout().flush().unwrap();
+}
+/* 
+#[cfg(test)]
+ mod tests {
+    use super::*;
+    use test::Bencher;
+
+    #[test]
+    fn it_works() {
+        assert_eq!(4, 2*2);
+    }
+
+    #[bench]
+    fn bench_minefield_creation(b: &mut Bencher) {
+        let mut _mines: usize = 0;
+        b.iter(|| generate_random_grid(100, 100, 0.15, &mut _mines))
+    }
+} */
