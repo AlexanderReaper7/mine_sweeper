@@ -24,7 +24,7 @@ fn main() {
         match mine_sweeper.game_state {
             GameState::Running => {
                 //let time = SystemTime::now();
-                alpha_ai.update_ai(&mut mine_sweeper); 
+                alpha_ai.update_ai_async(&mut mine_sweeper); 
                 //println!("step: {:?}, took {:?} us", alpha_ai.step, SystemTime::now().duration_since(time).unwrap().as_micros());
                 alpha_ai.step += 1;
 

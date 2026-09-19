@@ -11,7 +11,7 @@ fn bench_alpha_ai_noui(cols: usize, rows: usize, concentration: f64) {
     loop {
         match mine_sweeper.game_state {
             GameState::Running => {
-                alpha_ai.update_ai(&mut mine_sweeper); 
+                alpha_ai.update_ai_async(&mut mine_sweeper); 
                 alpha_ai.step += 1;
             }
             GameState::Won => {

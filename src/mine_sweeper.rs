@@ -1,6 +1,8 @@
+use std::time::Duration;
 use graphics::{color::BLACK, color::WHITE, ellipse, rectangle};
 use opengl_graphics::{GlGraphics, OpenGL};
 use piston::RenderArgs;
+use std::thread;
 use std::time::SystemTime;
 use std::char::from_digit;
 use rand::prelude::*;
@@ -141,6 +143,7 @@ impl MineSweeper {
                 clear([0.0, 1.0, 0.0, 1.0], gl);
             }
             GameState::Lost => {
+                thread::sleep(Duration::from_millis(10000));
                 clear([1.0, 0.0, 0.0, 1.0], gl);
             }
         }
@@ -210,7 +213,7 @@ impl MineSweeper {
                         let y: i32 = position[1] as i32 + neighbour[1] as i32;
                         if y < 0 || y >= self.states.len() as i32 { continue;}
                         
-                        let _ = self.reveal_cell( [x as usize, y as usize]);
+                        let _ = self.reveal_cell([x as usize, y as usize]);
                     }
                 }
                 return Ok(false)
@@ -222,7 +225,7 @@ impl MineSweeper {
         return Err(())
     }
 
-    fn toggle_flag_cell(&mut self, position: [usize;2]) -> Result<(ShownState, bool), ()> { // TODO: refactor to not use matches
+    fn toggle_flag_cell(&mut self, position: [usize;2]) -> Result<(ShownState, bool), ()> {
         match self.states[position[1] as usize][position[0] as usize] {
             ShownState::Hidden => {
                 if let Ok(res) = self.flag_cell(position) {

@@ -5,8 +5,9 @@ extern crate piston_window;
 extern crate mine_sweeper;
 
 use piston_window::*;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use time::Duration;
-use std::{time::SystemTime};
+use std::{time::SystemTime, vec};
 use mine_sweeper::{*, mine_sweeper::*};
 use opengl_graphics::{GlGraphics, OpenGL};
 use piston::{ResizeEvent, event_loop::{EventSettings, Events}};
@@ -42,7 +43,7 @@ fn main() {
     let mut losses: usize = 0;
     let mut times: Vec<(Duration, usize)> = Vec::with_capacity(40);
     let mut alpha_ai: AlphaAI = AlphaAI::new(mine_sweeper.cols(), mine_sweeper.rows());
-    let sleep_time = time::Duration::from_millis(0);
+    let sleep_time = time::Duration::from_millis(60);
 
 
     let mut gl: GlGraphics = GlGraphics::new(OpenGL::V3_2);
@@ -60,7 +61,7 @@ fn main() {
         if let Some(_) = e.update_args() { 
             match mine_sweeper.game_state {
                 GameState::Running => {
-                    alpha_ai.update_ai(&mut mine_sweeper); 
+                    alpha_ai.update_ai_async(&mut mine_sweeper); 
                     //println!("step: {:?}, took {:?} us", alpha_ai.step, SystemTime::now().duration_since(time).unwrap().as_micros());
                     alpha_ai.step += 1;
         
@@ -100,7 +101,7 @@ fn restart(alpha_ai: &mut AlphaAI, mine_sweeper: &mut MineSweeper, window: &mut 
     window.set_size(window_size)
 }
 
-
+#[derive(PartialEq, PartialOrd)]
 pub enum AiActions {
     Reveal,
     Flag,
@@ -146,6 +147,28 @@ impl AlphaAI {
         }
     }
 
+    pub fn update_ai_async(&mut self, mine_sweeper: &mut MineSweeper) {
+        match mine_sweeper.game_state {
+            GameState::Running => {
+                if let Some(next) = self.action_queue.pop_front() {
+                    match next.0 {
+                        AiActions::Reveal => {
+                            mine_sweeper.left_click_cell(next.1);
+                        }
+                        AiActions::Flag => {
+                            mine_sweeper.right_click_cell(next.1);
+                        }
+                    }
+                } else {
+                    if self.search_field_async(mine_sweeper) {return;}
+                    self.reveal_least_risky(mine_sweeper); 
+                }
+            }
+            _ => (),
+        }
+    }
+
+
     fn reveal_random(&mut self, mine_sweeper: &mut MineSweeper) {
         let mut rng_thread = rand::thread_rng();
         loop {
@@ -187,6 +210,7 @@ impl AlphaAI {
             self.reveal_random(mine_sweeper);
         }
     }
+    
 
     fn calculate_risks(&mut self, mine_sweeper: &mut MineSweeper) -> Vec<Vec<Option<f32>>> {
         let mut risks: Vec<Vec<Option<f32>>> = vec![vec![None;mine_sweeper.cols()]; mine_sweeper.rows()];
@@ -238,6 +262,35 @@ impl AlphaAI {
         }
         return false;
     }
+
+    /// Returns true if found cell() to reveal/flag
+    fn search_field_async(&mut self, mine_sweeper: &mut MineSweeper) -> bool {
+        self.update_skips();
+        let unsafes = self.generate_unskipped_indexes_array(mine_sweeper);
+
+        // search concurrently
+        let mut res = unsafes.par_iter().map(|target| {
+            self.eval_cell_for_safe_surrounding_reveals_async(mine_sweeper, *target)
+        }).collect::<Vec<(bool, Vec<(AiActions, [usize;2])>)>>();
+        // unpack
+        let mut out = false;
+        for (i, x) in res.iter_mut().enumerate() {
+            let pos = unsafes[i];
+            if x.0 == true {
+                self.safes[pos[1]][pos[0]] = true;
+            }
+            if !x.1.is_empty() {
+                out = true;
+            }
+            for elem in x.1.pop() {
+                if !self.action_queue.contains(&elem){
+                    self.action_queue.push_back(elem);
+                }
+            }
+        }
+        out
+    }
+
 
     /// Skips start on a safe and ends on an unsafe
     fn update_skips(&mut self) {
@@ -336,12 +389,32 @@ impl AlphaAI {
         return false
     }
 
+    /// Returns an array of indexes to be evaluated
+    fn generate_unskipped_indexes_array(&mut self, mine_sweeper: &mut MineSweeper) -> Vec<[usize;2]> {
+        let mut skip: usize = 0;
+        let mut y: usize = 0;
+        let mut x: usize = 0;
+        let mut output: Vec<[usize;2]> = Vec::with_capacity((mine_sweeper.rows()*mine_sweeper.cols())/2);
+        'outer: while y < mine_sweeper.rows() {
+            while x < mine_sweeper.cols() {
+                if self.try_skip(&mut x, &mut y, &mut skip) { 
+                    continue 'outer;
+                }
+                output.push([x,y]);
+                x += 1;
+            }
+            y += 1;
+            x = 0;
+        }
+        output
+    }
+
     fn eval_cell_for_safe_surrounding_reveals(&mut self, mine_sweeper: &mut MineSweeper, target: [usize;2]) -> bool {
         //println!("searching: {:?}", target);
         if let Some(val) = &mine_sweeper.mine_field[target[1]][target[0]] {
             if let Ok((flags ,hiddens)) = AlphaAI::count_surrounding_possible_mines(mine_sweeper, target) {
                 if hiddens.len() != 0 {
-                    // if val - flags == hidden, flag cells
+                    // if val - flags == hidden, flag cell
                     if val - flags == hiddens.len() as u8 {
                         for position in hiddens.iter() {
                             self.action_queue.push_back((AiActions::Flag, *position))
@@ -349,7 +422,7 @@ impl AlphaAI {
                         self.safes[target[1]][target[0]] = true;
                         return true;
                     }
-                    // if val == flags, reveal cells
+                    // if val == flags, reveal cell
                     else if flags == *val {
                         for position in hiddens.iter() {
                             self.action_queue.push_back((AiActions::Reveal, *position))
@@ -363,6 +436,36 @@ impl AlphaAI {
             }
         }
         return false;
+    }
+
+    fn eval_cell_for_safe_surrounding_reveals_async(&self, mine_sweeper:  &MineSweeper, target: [usize;2]) -> (bool, Vec<(AiActions, [usize;2])>) {
+        //println!("searching: {:?}", target);
+        let mut out: (bool, Vec<(AiActions, [usize;2])>) = (false, Vec::new());
+        if ShownState::Revealed == mine_sweeper.states[target[1]][target[0]] {
+            if let Ok((flags, hiddens)) = AlphaAI::count_surrounding_possible_mines(mine_sweeper, target) {
+                if hiddens.len() != 0 {
+                    let val = &mine_sweeper.mine_field[target[1]][target[0]].unwrap();
+                    // if val - flags == hidden, flag cell
+                    if *val - flags == hiddens.len() as u8 {
+                        for position in hiddens.iter() {
+                            out.1.push((AiActions::Flag, *position))
+                        }
+                        out.0 = true;
+                    }
+                    // if val == flags, reveal cell
+                    else if flags == *val {
+                        for position in hiddens.iter() {
+                            out.1.push((AiActions::Reveal, *position))
+                        }
+                        out.0 = true;
+                    }
+                } 
+                else {
+                    out.0 = true;
+                }
+            }
+        }
+        out
     }
 
     fn count_surrounding_possible_mines(mine_sweeper: &MineSweeper, target: [usize;2]) -> Result<(u8, Vec<[usize;2]>), &str>{
@@ -382,7 +485,7 @@ impl AlphaAI {
                         _ => {}
                     }
                 }
-                hidden.shrink_to_fit();
+                // hidden.shrink_to_fit();
                 return Ok((count, hidden))
 
             } else {
